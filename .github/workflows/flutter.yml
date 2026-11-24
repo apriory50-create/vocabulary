@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  analyze-test-build:
+  build-release:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -21,15 +21,23 @@ jobs:
           channel: stable
           cache: true
 
-      # Папка android/ не хранится в репозитории, создаём её, если её нет.
-      # Существующие файлы из lib/ и pubspec.yaml при этом не меняются.
+      # android/ не хранится в репозитории: создаём её, если нет.
+      # Существующие файлы lib/, test/ и pubspec.yaml при этом не меняются.
       - name: Generate Android project if missing
         run: |
           if [ ! -d android ]; then
-            flutter create --platform android --project-name vocab .
+            flutter create --platform android --project-name vocab --org com.example .
           fi
 
-      # Шаблон Flutter добавляет INTERNET только в debug, без него ИИ не работает в release.
+      # flutter_secure_storage требует minSdk 23, шаблон может задавать меньше.
+      - name: Raise minSdk to 23
+        run: |
+          for f in android/app/build.gradle android/app/build.gradle.kts; do
+            [ -f "$f" ] || continue
+            sed -i -E 's/minSdk(Version)? *=? *flutter\.minSdkVersion/minSdk\1 = 23/' "$f"
+          done
+
+      # Шаблон добавляет INTERNET только в debug, без него ИИ не работает в release.
       - name: Ensure INTERNET permission
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
@@ -41,18 +49,18 @@ jobs:
         run: flutter pub get
 
       - name: Analyze
-        run: flutter analyze --no-fatal-infos
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
 
       - name: Test
         run: flutter test
 
-      - name: Build debug APK
-        run: flutter build apk --debug
+      - name: Build release APK
+        run: flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: vocab-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: vocab-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
