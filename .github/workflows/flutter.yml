@@ -21,6 +21,12 @@ jobs:
           channel: stable
           cache: true
 
+      # Защита от шаблонного кода: если lib/main.dart не наш, сборка остановится сразу.
+      - name: Verify project sources
+        run: |
+          test -f pubspec.yaml || { echo "pubspec.yaml не в корне репозитория"; exit 1; }
+          grep -q "VocabApp" lib/main.dart || { echo "lib/main.dart не содержит VocabApp: в репозитории шаблонный код"; exit 1; }
+
       # android/ не хранится в репозитории: создаём её, если нет.
       # Существующие файлы lib/, test/ и pubspec.yaml при этом не меняются.
       - name: Generate Android project if missing
